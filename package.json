@@ -1,0 +1,136 @@
+{
+  "name": "trello-code-pilot",
+  "displayName": "Trello Code Pilot",
+  "description": "Sync Trello cards with your repo and let Claude Code agents implement tasks automatically",
+  "version": "0.1.0",
+  "publisher": "luizhenriquesoares",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/luizhenriquesoares/trello-code-pilot"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "trello",
+    "claude",
+    "ai",
+    "agent",
+    "automation",
+    "task-management"
+  ],
+  "activationEvents": [
+    "workspaceContains:.trello-pilot.json"
+  ],
+  "main": "./dist/extension.js",
+  "icon": "media/icon.png",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "trello-code-pilot",
+          "title": "Trello Code Pilot",
+          "icon": "media/trello-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "trello-code-pilot": [
+        {
+          "id": "trelloPilot.cards",
+          "name": "Cards"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "trelloPilot.setup",
+        "title": "Trello Code Pilot: Setup Board Connection"
+      },
+      {
+        "command": "trelloPilot.sync",
+        "title": "Trello Code Pilot: Sync Cards",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "trelloPilot.runCard",
+        "title": "Trello Code Pilot: Run Agent on Card",
+        "icon": "$(play)"
+      },
+      {
+        "command": "trelloPilot.runAll",
+        "title": "Trello Code Pilot: Run Agent on All Cards",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "trelloPilot.setCredentials",
+        "title": "Trello Code Pilot: Set Trello API Credentials"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "trelloPilot.sync",
+          "when": "view == trelloPilot.cards",
+          "group": "navigation"
+        },
+        {
+          "command": "trelloPilot.runAll",
+          "when": "view == trelloPilot.cards",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "trelloPilot.runCard",
+          "when": "view == trelloPilot.cards",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Trello Code Pilot",
+      "properties": {
+        "trelloPilot.claudeCodePath": {
+          "type": "string",
+          "default": "claude",
+          "description": "Path to Claude Code CLI binary"
+        },
+        "trelloPilot.autoMoveCard": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically move card to 'doing' list when agent starts and 'review' when done"
+        },
+        "trelloPilot.createBranch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Create a git branch for each card before running the agent"
+        },
+        "trelloPilot.branchPrefix": {
+          "type": "string",
+          "default": "feat/",
+          "description": "Prefix for auto-created branches"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "tsup src/extension.ts --external vscode --format cjs --out-dir dist",
+    "watch": "tsup src/extension.ts --external vscode --format cjs --out-dir dist --watch",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.56.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  }
+}
