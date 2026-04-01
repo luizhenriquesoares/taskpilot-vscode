@@ -1,6 +1,6 @@
 # Trello Code Pilot
 
-> Turn Trello cards into code. AI agents read your board, create branches, implement tasks, and move cards — all from VS Code.
+> Turn Trello cards into code with a full AI-powered CI pipeline — implement, review, test, and merge — all from VS Code.
 
 [![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/LuizHenriqueSoares.trello-code-pilot)](https://marketplace.visualstudio.com/items?itemName=LuizHenriqueSoares.trello-code-pilot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -9,47 +9,45 @@
 
 ## What it does
 
-Trello Code Pilot connects your Trello board to your codebase. Instead of reading a card and manually coding, you press **Run** and a Claude Code agent handles it:
+Trello Code Pilot connects your Trello board to your codebase and runs a full AI pipeline on each card:
 
-1. Reads the card (title, description, checklists, attachments)
-2. Creates a git branch (`feat/implement-user-auth`)
-3. Implements the task following your project's conventions
-4. Moves the card to "In Review" on Trello
+1. **Implement** — Claude Code reads the card, creates a branch, and writes the code
+2. **Review** — An AI reviewer analyzes the diff for bugs, security issues, and rule violations
+3. **QA** — Runs tests, validates compilation, and if everything passes, merges to main and pushes
 
-You review the code. That's it.
+You click a button. The AI does the rest.
 
 ---
 
-## How it works
+## Pipeline
 
 ```
-Trello Board                    VS Code                         Your Repo
-┌──────────┐                ┌──────────────┐                ┌─────────────┐
-│ To Do    │───── Sync ────▶│  Sidebar     │                │             │
-│ ├─ Card1 │                │  ├─ Card1 ▶  │── Run Agent ──▶│ Branch +    │
-│ ├─ Card2 │                │  ├─ Card2 ▶  │                │ Implement + │
-│ └─ Card3 │                │  └─ Card3 ▶  │                │ Commit      │
-├──────────┤                ├──────────────┤                │             │
-│ Doing    │◀── Auto-move ──│  Output      │                │             │
-├──────────┤                │  Panel       │◀── Streaming ──│             │
-│ Review   │◀── Auto-move ──│  (real-time) │                │             │
-└──────────┘                └──────────────┘                └─────────────┘
+  Todo          Doing         Review          QA            Done
+┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐
+│  ✏ Card  │──▶│  ▶ Code │──▶│  🔍 Scan │──▶│  🧪 Test │──▶│  ✓ Ship │
+│         │   │         │   │  Bugs   │   │  Build  │   │  Merge  │
+│         │   │  Branch │   │  SOLID  │   │  Lint   │   │  Push   │
+│         │   │  Commit │   │  Rules  │   │  Merge  │   │         │
+└─────────┘   └─────────┘   └─────────┘   └─────────┘   └─────────┘
 ```
+
+Each stage opens Claude Code in an interactive IDE terminal, so you can watch and intervene at any point.
 
 ---
 
 ## Features
 
-- **Board ↔ Repo mapping** — setup wizard connects your Trello board to the current project
-- **Sidebar with cards** — see To Do, In Progress, and Review cards in VS Code
-- **One-click agent** — run Claude Code on a single card or all cards
-- **Parallel execution** — run 2-3 agents simultaneously on different cards
-- **Real-time output** — watch what the agent is doing in the Output panel
-- **Auto branch** — creates `feat/card-name` branches automatically
-- **Auto card movement** — moves cards through your workflow (To Do → Doing → Review)
-- **Open in Trello** — quick link to open any card in the browser
-- **Secure credentials** — API keys stored in VS Code's encrypted secret storage
-- **Rich card info** — labels, due dates, checklists progress, overdue warnings
+- **Full CI pipeline** — Todo → Doing → Review → QA → Done, each with its own AI agent
+- **Project rules** — Define coding standards in `.trello-pilot.json` and they're enforced automatically
+- **Pipeline dashboard** — Visual card counters per stage in the sidebar
+- **Card detail view** — Click any card to see full description, checklists, labels, and attachments
+- **Smart icons** — Each pipeline stage has its own icon (inbox, play, search, beaker, check)
+- **Auto branch** — Creates `feat/card-name` branches automatically
+- **Auto card movement** — Moves cards through your workflow on Trello
+- **Auto-sync** — Refreshes from Trello every 5 minutes
+- **Claude Code integration** — Opens in the IDE terminal via `claude-vscode.terminal.open`
+- **Rich card info** — Labels, due dates, checklists progress, overdue warnings
+- **Credential fallback** — Stores API keys in SecretStorage + config file as backup
 
 ---
 
@@ -77,7 +75,7 @@ code --install-extension LuizHenriqueSoares.trello-code-pilot
 1. `Cmd+Shift+P` → **Trello Code Pilot: Set Trello API Credentials**
 2. Enter your API Key and Token
 3. `Cmd+Shift+P` → **Trello Code Pilot: Setup Board Connection**
-4. Select your board and map your lists (To Do, In Progress, Done, Review)
+4. Select your board and map your lists (Todo, Doing, Done, Review, QA)
 
 This creates a `.trello-pilot.json` in your project:
 
@@ -90,14 +88,22 @@ This creates a `.trello-pilot.json` in your project:
     "todo": "list-id-1",
     "doing": "list-id-2",
     "done": "list-id-3",
-    "review": "list-id-4"
-  }
+    "review": "list-id-4",
+    "qa": "list-id-5"
+  },
+  "rules": [
+    "Follow Clean Architecture: domain → application → infrastructure → presentation",
+    "Never use 'any' in TypeScript — use proper interfaces/types",
+    "Apply SOLID principles",
+    "Commit with clear, concise message in English"
+  ]
 }
 ```
 
 ### 4. Requirements
 
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- [Claude Code VS Code extension](https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code) installed
 - Node.js 18+
 - A Trello account with API access
 
@@ -105,23 +111,82 @@ This creates a `.trello-pilot.json` in your project:
 
 ## Usage
 
+### Pipeline actions
+
+| List | Button | What happens |
+|------|--------|-------------|
+| **Todo** | ▶ Play | Creates branch, opens Claude Code to implement the task |
+| **Doing** | ▶ Play | Continues implementation |
+| **Review** | 🔍 Search | Opens Claude Code to review: bugs, security, SOLID, rules compliance |
+| **QA** | 🧪 Beaker | Runs tests, validates build, merges to main & pushes if all pass |
+
+### Card detail
+
+Click any card in the sidebar to open a detail view with description, checklists, labels, and attachments.
+
 ### Sync cards
-Click the **sync icon** (↻) in the sidebar header or `Cmd+Shift+P` → **Sync Cards**.
 
-### Run agent on one card
-Click the **play icon** (▶) next to a card, or right-click → **Run Agent on Card**.
+Click the **sync icon** (↻) in the sidebar header. Cards auto-sync every 5 minutes.
 
-### Run agent on all cards
-Click the **run-all icon** in the sidebar header. Choose between:
-- **Sequential** — one at a time
-- **Parallel (2)** — two agents working simultaneously
-- **Parallel (3)** — three agents at once
+### Run all cards
 
-### Open card in Trello
-Click the **external link icon** next to a card to open it in the browser.
+Click the **run-all icon** in the sidebar header. Choose sequential or parallel execution.
 
-### Watch agent output
-Open the Output panel (`Cmd+Shift+U`) and select **"Trello Code Pilot"** to see real-time agent logs.
+---
+
+## Project Rules
+
+Define rules in `.trello-pilot.json` under the `rules` array. These are injected into every agent prompt:
+
+```json
+{
+  "rules": [
+    "## Backend (NestJS)",
+    "Use cases must have a single execute() method",
+    "Repositories: interface in application/ports/, implementation in infrastructure/",
+    "Throw domain-specific errors extending DomainError",
+
+    "## Frontend (React)",
+    "Use b2bFetch() from lib/b2b-api.ts — never use fetch() directly",
+    "Style with Tailwind CSS + Radix UI components",
+    "Use useToast() for error feedback",
+
+    "## General",
+    "Never use 'any' in TypeScript",
+    "Apply SOLID principles",
+    "Use constants for fixed values — no magic numbers"
+  ]
+}
+```
+
+Rules are enforced during implementation and validated during review.
+
+---
+
+## How Each Agent Works
+
+### Implement Agent (▶ Play)
+
+1. Moves card to "Doing" on Trello
+2. Creates a `feat/card-name` branch
+3. Builds a prompt from card title, description, checklists, attachments, and project rules
+4. Opens Claude Code in the IDE terminal
+
+### Review Agent (🔍 Search)
+
+1. Switches to the card's branch
+2. Runs `git diff main...HEAD` to see all changes
+3. Analyzes for: bugs, security issues, SOLID violations, project rules compliance, dead code
+4. Fixes issues directly and commits, or reports "Review passed"
+
+### QA Agent (🧪 Beaker)
+
+1. Switches to the card's branch
+2. Runs `npx tsc --noEmit` to validate compilation
+3. Runs test suite if it exists
+4. Checks for console.log, unused imports, lint errors
+5. If all checks pass: merges to main and pushes
+6. If checks fail: fixes and retries, or reports failures
 
 ---
 
@@ -133,23 +198,6 @@ Open the Output panel (`Cmd+Shift+U`) and select **"Trello Code Pilot"** to see 
 | `trelloPilot.autoMoveCard` | `true` | Auto-move cards between lists |
 | `trelloPilot.createBranch` | `true` | Create git branch per card |
 | `trelloPilot.branchPrefix` | `feat/` | Branch prefix (`feat/`, `fix/`, `chore/`) |
-
----
-
-## How the Agent Processes a Card
-
-For each card, the agent:
-
-1. **Moves card** to "In Progress" on Trello
-2. **Creates a branch** — e.g., `feat/add-password-reset-flow`
-3. **Builds a prompt** from the card:
-   - Title and description
-   - Labels and due date
-   - Checklists (as acceptance criteria)
-   - Attachments (as references)
-4. **Runs Claude Code** with full project context
-5. **Streams output** to the Output panel in real-time
-6. **Moves card** to "Review" when done
 
 ---
 
@@ -167,11 +215,16 @@ npm run watch
 
 ## Roadmap
 
-- [ ] Webview with full card details and execution history
+- [x] Full CI pipeline (Implement → Review → QA → Merge)
+- [x] Project rules enforcement
+- [x] Pipeline dashboard with card counts
+- [x] Card detail webview
+- [x] Auto-sync every 5 minutes
+- [x] Claude Code IDE terminal integration
 - [ ] Filter cards by label, member, or due date
 - [ ] Custom prompt templates per label (e.g., "bug" vs "feature")
-- [ ] Auto-commit with card reference in message
 - [ ] Status bar showing active agents
+- [ ] Webhook-based real-time sync (instead of polling)
 - [ ] Support for Jira, Linear, GitHub Projects
 
 ---
