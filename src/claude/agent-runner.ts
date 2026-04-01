@@ -554,12 +554,11 @@ sys.stdout.flush()
         `echo ""`,
         `echo "=== Done: $(date '+%H:%M:%S') (exit: $EXIT_CODE) ==="`,
         `rm -f "$PROMPT_FILE" "$FILTER" "${scriptFile}"`,
-        `sleep 2`,
-        `exit $EXIT_CODE`,
       ].join('\n'), 'utf-8');
       fs.chmodSync(scriptFile, '755');
 
-      terminal.sendText(`sh '${scriptFile}'`, true);
+      // exec replaces the shell process — when script exits, terminal closes
+      terminal.sendText(`exec sh '${scriptFile}'`, true);
 
       // Listen for this terminal closing
       const listener = vscode.window.onDidCloseTerminal((closedTerminal) => {
