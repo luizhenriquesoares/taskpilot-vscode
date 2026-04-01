@@ -178,18 +178,8 @@ export class CardsTreeProvider implements vscode.TreeDataProvider<vscode.TreeIte
     if (!this.config) return;
 
     this.lists = await this.api.getBoardLists(this.config.boardId);
-    const allCards = await this.api.getBoardCards(this.config.boardId);
-
-    // Enrich cards with checklists
-    this.cards = await Promise.all(
-      allCards.map(async (card) => {
-        if (!card.checklists?.length) {
-          const checklists = await this.api.getCardChecklists(card.id);
-          return { ...card, checklists };
-        }
-        return card;
-      }),
-    );
+    // getBoardCards already includes checklists=all, no need for individual fetches
+    this.cards = await this.api.getBoardCards(this.config.boardId);
 
     // Filter only the mapped lists (project lists + pipeline)
     const relevantListIds = new Set([
@@ -202,7 +192,7 @@ export class CardsTreeProvider implements vscode.TreeDataProvider<vscode.TreeIte
 
     // Count Done cards before filtering them out of the tree
     this.doneCount = this.config.lists.done
-      ? allCards.filter((c) => c.idList === this.config!.lists.done).length
+      ? this.cards.filter((c) => c.idList === this.config!.lists.done).length
       : 0;
 
     this.lists = this.lists.filter((l) => relevantListIds.has(l.id));
