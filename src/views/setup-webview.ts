@@ -91,8 +91,8 @@ export class SetupWebviewProvider implements vscode.WebviewViewProvider {
       <div class="step">
         <div class="step-number">1</div>
         <div class="step-content">
-          <h3>Get Trello API Key</h3>
-          <p>Create a Power-Up to get your API key and token.</p>
+          <h3>Create a Power-Up</h3>
+          <p>Go to Trello Admin, create a Power-Up, and copy the <strong>API Key</strong> shown inside it.</p>
           <button class="btn btn-secondary" id="btnOpenTrelloAdmin">
             Open Trello Admin
             <span class="icon">&#8599;</span>
@@ -103,8 +103,8 @@ export class SetupWebviewProvider implements vscode.WebviewViewProvider {
       <div class="step">
         <div class="step-number">2</div>
         <div class="step-content">
-          <h3>Enter Credentials</h3>
-          <p>Your API key and token are stored securely.</p>
+          <h3>Set Key &amp; Generate Token</h3>
+          <p>Enter the API Key — a browser page will open for you to authorize and copy the token.</p>
           <button class="btn btn-primary" id="btnSetCredentials">
             Set API Credentials
           </button>
