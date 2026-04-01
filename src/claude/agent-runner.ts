@@ -571,81 +571,6 @@ sys.stdout.flush()
     });
   }
 
-  /**
-   * Find the branch for a card. Tries:
-   * 1. Exact slug match (local)
-   * 2. Exact slug match (remote)
-   * 3. Fuzzy search by card keywords (local + remote)
-   * 4. Ask user to pick from all branches
-   */
-  private async findBranch(workspaceRoot: string, card: TrelloCard, branchPrefix: string): Promise<string> {
-    const expectedBranch = this.promptBuilder.buildBranchName(card, branchPrefix);
-
-    // 1. Try exact local match
-    try {
-      const local = await this.execGit(workspaceRoot, ['branch', '--list', expectedBranch]);
-      if (local.trim()) return expectedBranch;
-    } catch { /* ignore */ }
-
-    // 2. Try exact remote match and create local tracking branch
-    try {
-      await this.execGit(workspaceRoot, ['fetch', 'origin', expectedBranch]);
-      await this.execGit(workspaceRoot, ['checkout', '-b', expectedBranch, `origin/${expectedBranch}`]);
-      return expectedBranch;
-    } catch { /* ignore */ }
-
-    // 3. Fuzzy search: keywords from card name
-    const keywords = card.name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '')
-      .split(/\s+/)
-      .filter((w) => w.length > 3);
-
-    if (keywords.length > 0) {
-      try {
-        const allBranches = await this.execGit(workspaceRoot, ['branch', '-a', '--format=%(refname:short)']);
-        const branches = allBranches.split('\n').filter((b) => b.trim());
-
-        const matches = branches.filter((b) => {
-          const lower = b.toLowerCase();
-          return keywords.some((kw) => lower.includes(kw));
-        });
-
-        if (matches.length === 1) {
-          const branch = matches[0].replace('origin/', '');
-          this.output.logAgent(card.name, `Found matching branch: ${branch}`);
-          return branch;
-        }
-
-        if (matches.length > 1) {
-          const pick = await vscode.window.showQuickPick(
-            matches.map((b) => b.replace('origin/', '')),
-            { placeHolder: `Multiple branches found for "${card.name}". Pick one:` },
-          );
-          if (pick) return pick;
-        }
-      } catch { /* ignore */ }
-    }
-
-    // 4. Fallback: let user pick any branch (including main)
-    try {
-      const allBranches = await this.execGit(workspaceRoot, ['branch', '--format=%(refname:short)']);
-      const branches = allBranches.split('\n').filter((b) => b.trim());
-
-      const pick = await vscode.window.showQuickPick(
-        [
-          { label: 'main', description: 'Changes were committed directly to main' },
-          ...branches
-            .filter((b) => b.trim() !== 'main' && b.trim() !== 'master')
-            .map((b) => ({ label: b.trim(), description: '' })),
-        ],
-        { placeHolder: `No branch found for "${card.name}". Select manually:` },
-      );
-      if (pick) return pick.label;
-    } catch { /* ignore */ }
-
-    throw new Error(`No branch found for "${card.name}". Run Play (implementation) first to create the branch.`);
-  }
 
   /**
    * Resolve the branch for a card. Priority:
@@ -661,7 +586,6 @@ sys.stdout.flush()
         await this.execGit(workspaceRoot, ['checkout', origin.branchName]);
         return origin.branchName;
       } catch {
-        // Branch may not exist locally, try fetching from remote
         try {
           await this.execGit(workspaceRoot, ['fetch', 'origin', origin.branchName]);
           await this.execGit(workspaceRoot, ['checkout', origin.branchName]);
@@ -670,16 +594,45 @@ sys.stdout.flush()
       }
     }
 
-    // 2. Check current branch
+    // 2. Check current branch (if on a feature branch, use it)
     const currentBranch = await this.execGit(workspaceRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
     if (currentBranch !== 'main' && currentBranch !== 'master') {
       return currentBranch;
     }
 
-    // 3. Fallback to findBranch
-    const branchName = await this.findBranch(workspaceRoot, card, branchPrefix);
-    await this.execGit(workspaceRoot, ['checkout', branchName]);
-    return branchName;
+    // 3. Try exact expected branch name
+    const expectedBranch = this.promptBuilder.buildBranchName(card, branchPrefix);
+    try {
+      const local = await this.execGit(workspaceRoot, ['branch', '--list', expectedBranch]);
+      if (local.trim()) {
+        await this.execGit(workspaceRoot, ['checkout', expectedBranch]);
+        return expectedBranch;
+      }
+    } catch { /* ignore */ }
+
+    // 4. Try fetching expected branch from remote
+    try {
+      await this.execGit(workspaceRoot, ['fetch', 'origin', expectedBranch]);
+      await this.execGit(workspaceRoot, ['checkout', expectedBranch]);
+      return expectedBranch;
+    } catch { /* ignore */ }
+
+    // 5. No branch found — ask user: run on main or cancel
+    this.output.logAgent(card.name, 'No branch found — card may not have been implemented via Play');
+    const pick = await vscode.window.showQuickPick(
+      [
+        { label: 'main', description: 'Review/QA changes committed directly to main' },
+        { label: 'Cancel', description: 'Cancel this operation' },
+      ],
+      { placeHolder: `No branch found for "${card.name}". Run on main?` },
+    );
+
+    if (!pick || pick.label === 'Cancel') {
+      throw new Error(`No branch found for "${card.name}". Run Play first to create a branch.`);
+    }
+
+    await this.execGit(workspaceRoot, ['checkout', 'main']);
+    return 'main';
   }
 
   /** Resolve list name from project lists config or fallback to "todo" */
