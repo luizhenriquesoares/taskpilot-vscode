@@ -238,9 +238,12 @@ export class PromptBuilder {
   buildBranchName(card: TrelloCard, prefix: string): string {
     const slug = card.name
       .toLowerCase()
+      // Normalize accented characters: é→e, ã→a, ç→c, ú→u, etc.
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-')
-      .substring(0, 50)
+      .substring(0, 35)
       .replace(/-$/, '');
 
     return `${prefix}${slug}`;
