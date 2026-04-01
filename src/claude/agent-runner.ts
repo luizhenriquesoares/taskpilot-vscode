@@ -7,6 +7,7 @@ import { TrelloCard, WorkspaceConfig } from '../trello/types';
 import { TrelloApi } from '../trello/api';
 import { WorkspaceMapper } from '../trello/mapper';
 import { PromptBuilder } from './prompt-builder';
+import { KnowledgeManager } from './knowledge';
 import { OutputPanel } from '../views/output-panel';
 
 export interface AgentRunResult {
@@ -20,6 +21,7 @@ export interface AgentRunResult {
 export class AgentRunner {
   private promptBuilder = new PromptBuilder();
   private mapper: WorkspaceMapper;
+  private knowledgeMgr = new KnowledgeManager();
 
   constructor(
     private api: TrelloApi,
@@ -30,6 +32,26 @@ export class AgentRunner {
       this.promptBuilder.setRules(config.rules);
     }
     this.mapper = new WorkspaceMapper(api);
+  }
+
+  /** Load or generate project knowledge for a workspace */
+  private async ensureKnowledge(workspaceRoot: string, claudePath: string): Promise<void> {
+    let knowledge = this.knowledgeMgr.load(workspaceRoot);
+
+    if (knowledge) {
+      this.output.logAgent('Knowledge', `Loaded cached knowledge (${knowledge.techStack.join(', ')})`);
+    } else {
+      this.output.logAgent('Knowledge', 'Generating project knowledge (first run)...');
+      knowledge = await this.knowledgeMgr.generate(workspaceRoot, claudePath);
+      if (knowledge) {
+        this.output.logAgent('Knowledge', `Generated: ${knowledge.architecture}`);
+      } else {
+        this.output.logAgent('Knowledge', 'Could not generate — will scan normally');
+        return;
+      }
+    }
+
+    this.promptBuilder.setKnowledge(this.knowledgeMgr.formatForPrompt(knowledge));
   }
 
   /**
@@ -176,6 +198,9 @@ export class AgentRunner {
         this.output.logAgent(card.name, `Switched to existing branch: ${branchName}`);
       }
     }
+
+    // Load/generate project knowledge
+    await this.ensureKnowledge(workspaceRoot, claudePath);
 
     // Build prompt and open Claude Code in terminal
     const prompt = this.promptBuilder.build(card);

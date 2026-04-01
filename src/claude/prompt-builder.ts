@@ -2,9 +2,14 @@ import { TrelloCard } from '../trello/types';
 
 export class PromptBuilder {
   private rules: string[] = [];
+  private knowledgeContext: string = '';
 
   setRules(rules: string[]): void {
     this.rules = rules;
+  }
+
+  setKnowledge(knowledgeContext: string): void {
+    this.knowledgeContext = knowledgeContext;
   }
 
   build(card: TrelloCard): string {
@@ -12,6 +17,11 @@ export class PromptBuilder {
 
     sections.push(`# Task: ${card.name}`);
     sections.push('');
+
+    // Inject project knowledge if available
+    if (this.knowledgeContext) {
+      sections.push(this.knowledgeContext);
+    }
 
     if (card.desc) {
       sections.push('## Description');
