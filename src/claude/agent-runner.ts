@@ -153,10 +153,11 @@ export class AgentRunner {
       } catch { /* ignore */ }
     }
 
-    // Save origin project list before moving to pipeline
+    // Save origin project list + branch name before moving to pipeline
     const originListName = this.resolveOriginListName(card.idList);
+    const plannedBranch = createBranch ? this.promptBuilder.buildBranchName(card, branchPrefix) : undefined;
     if (originListName) {
-      this.mapper.saveCardOrigin(card.id, card.idList, originListName);
+      this.mapper.saveCardOrigin(card.id, card.idList, originListName, plannedBranch);
       this.output.logAgent(card.name, `Origin project: ${originListName}`);
     }
 
@@ -264,23 +265,9 @@ export class AgentRunner {
     this.output.logSeparator();
     this.output.logAgent(card.name, 'Starting code review...');
 
-    // Try current branch first (Play may have left it checked out), then findBranch
-    let branchName: string;
-    const currentBranch = await this.execGit(workspaceRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
-    const expectedBranch = this.promptBuilder.buildBranchName(card, branchPrefix);
-
-    if (currentBranch === expectedBranch) {
-      branchName = currentBranch;
-      this.output.logAgent(card.name, `Using current branch: ${branchName}`);
-    } else if (currentBranch !== 'main' && currentBranch !== 'master') {
-      // On a feature branch — likely left from Play
-      branchName = currentBranch;
-      this.output.logAgent(card.name, `Using current branch: ${branchName}`);
-    } else {
-      branchName = await this.findBranch(workspaceRoot, card, branchPrefix);
-      await this.execGit(workspaceRoot, ['checkout', branchName]);
-      this.output.logAgent(card.name, `Switched to branch: ${branchName}`);
-    }
+    // Resolve branch: saved origin → current branch → findBranch
+    const branchName = await this.resolveBranch(workspaceRoot, card, branchPrefix);
+    this.output.logAgent(card.name, `Using branch: ${branchName}`);
 
     // Find existing PR URL for this branch
     let prUrl = '';
@@ -365,21 +352,9 @@ export class AgentRunner {
     this.output.logSeparator();
     this.output.logAgent(card.name, 'Starting QA...');
 
-    // Try current branch first (Review may have left it checked out)
-    let branchName: string;
-    const currentBranch = await this.execGit(workspaceRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
-    const expectedBranch = this.promptBuilder.buildBranchName(card, branchPrefix);
-
-    if (currentBranch === expectedBranch || currentBranch !== 'main' && currentBranch !== 'master') {
-      // Already on the right branch (or a feature branch from Review)
-      branchName = currentBranch;
-      this.output.logAgent(card.name, `Using current branch: ${branchName}`);
-    } else {
-      // Fallback to findBranch (fuzzy search)
-      branchName = await this.findBranch(workspaceRoot, card, branchPrefix);
-      await this.execGit(workspaceRoot, ['checkout', branchName]);
-      this.output.logAgent(card.name, `Switched to branch: ${branchName}`);
-    }
+    // Resolve branch: saved origin → current branch → findBranch
+    const branchName = await this.resolveBranch(workspaceRoot, card, branchPrefix);
+    this.output.logAgent(card.name, `Using branch: ${branchName}`);
 
     // Find PR URL
     let prUrl = '';
@@ -670,6 +645,41 @@ sys.stdout.flush()
     } catch { /* ignore */ }
 
     throw new Error(`No branch found for "${card.name}". Run Play (implementation) first to create the branch.`);
+  }
+
+  /**
+   * Resolve the branch for a card. Priority:
+   * 1. Saved branch name from origin tracking (set during Play)
+   * 2. Current branch if it's a feature branch
+   * 3. findBranch (fuzzy search + manual pick)
+   */
+  private async resolveBranch(workspaceRoot: string, card: TrelloCard, branchPrefix: string): Promise<string> {
+    // 1. Check saved branch name from origin tracking
+    const origin = this.mapper.getCardOrigin(card.id);
+    if (origin?.branchName) {
+      try {
+        await this.execGit(workspaceRoot, ['checkout', origin.branchName]);
+        return origin.branchName;
+      } catch {
+        // Branch may not exist locally, try fetching from remote
+        try {
+          await this.execGit(workspaceRoot, ['fetch', 'origin', origin.branchName]);
+          await this.execGit(workspaceRoot, ['checkout', origin.branchName]);
+          return origin.branchName;
+        } catch { /* fall through */ }
+      }
+    }
+
+    // 2. Check current branch
+    const currentBranch = await this.execGit(workspaceRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    if (currentBranch !== 'main' && currentBranch !== 'master') {
+      return currentBranch;
+    }
+
+    // 3. Fallback to findBranch
+    const branchName = await this.findBranch(workspaceRoot, card, branchPrefix);
+    await this.execGit(workspaceRoot, ['checkout', branchName]);
+    return branchName;
   }
 
   /** Resolve list name from project lists config or fallback to "todo" */
