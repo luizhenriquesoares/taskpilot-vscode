@@ -317,27 +317,121 @@ export class PromptBuilder {
     sections.push('## QA Instructions');
     sections.push(`You are running QA on branch \`${branchName}\`.`);
     sections.push('');
+
+    // Step 1 — Understand Changes
     sections.push('### Step 1 — Understand Changes');
     sections.push('Run `git diff main...HEAD` to see all changes in this branch.');
+    sections.push('Identify which files were added/modified and categorize them:');
+    sections.push('- New endpoints / routes');
+    sections.push('- New components / pages');
+    sections.push('- New use cases / services');
+    sections.push('- Modified existing code');
+    sections.push('Keep this list — you will need it in Step 5 to verify test coverage.');
     sections.push('');
-    sections.push('### Step 2 — Run Existing Tests');
-    sections.push('Check if the project has tests and run them:');
-    sections.push('- Backend: `cd backend && npm test` (if exists)');
-    sections.push('- Frontend: `cd frontend && npm test` (if exists)');
-    sections.push('- If no test suite exists, skip to Step 3');
+
+    // Step 2 — Type Check
+    sections.push('### Step 2 — Type Check');
+    sections.push('Run `npx tsc --noEmit` in each project directory (backend, frontend, or root).');
+    sections.push('- If the project has a `tsconfig.json`, run the type check');
+    sections.push('- Fix any type errors before proceeding');
+    sections.push('- If no TypeScript config exists, skip this step');
     sections.push('');
-    sections.push('### Step 3 — Manual Verification');
-    sections.push('- Verify the code compiles: `cd backend && npx tsc --noEmit` and `cd frontend && npx tsc --noEmit`');
+
+    // Step 3 — Detect Test Framework
+    sections.push('### Step 3 — Detect Test Framework');
+    sections.push('Check if the project has a test framework configured:');
+    sections.push('1. Read `package.json` (root, backend/, frontend/) and look for:');
+    sections.push('   - `scripts.test` — does it exist and is it NOT `echo "Error: no test specified" && exit 1`?');
+    sections.push('   - `devDependencies` or `dependencies` containing: `jest`, `vitest`, `mocha`, `@testing-library/*`');
+    sections.push('2. Check for config files: `jest.config.*`, `vitest.config.*`, `.mocharc.*`');
+    sections.push('3. Check for existing test directories: `__tests__/`, `test/`, `tests/`, `*.spec.*`, `*.test.*`');
+    sections.push('');
+    sections.push('Record what you find:');
+    sections.push('- `HAS_TEST_FRAMEWORK`: true/false');
+    sections.push('- `TEST_COMMAND`: the command to run tests (e.g., `npm test`, `npx jest`, `npx vitest run`)');
+    sections.push('- `HAS_EXISTING_TESTS`: true/false (are there any test files?)');
+    sections.push('');
+
+    // Step 4 — Run Existing Tests
+    sections.push('### Step 4 — Run Existing Tests');
+    sections.push('If `HAS_TEST_FRAMEWORK` is true AND `HAS_EXISTING_TESTS` is true:');
+    sections.push('1. Run the test suite: `TEST_COMMAND` (e.g., `npm test`, `npx jest --passWithNoTests`, `npx vitest run`)');
+    sections.push('2. If tests fail:');
+    sections.push('   - Check if the failures are caused by the changes in this branch');
+    sections.push('   - If yes → fix the code and commit: "fix: QA test fixes for <task-name>"');
+    sections.push('   - If tests were already broken on main → note it but do not block');
+    sections.push('3. ALL tests must pass before proceeding');
+    sections.push('');
+
+    // Step 5 — Test Coverage for New Code
+    sections.push('### Step 5 — Verify Test Coverage for New Code (CRITICAL)');
+    sections.push('Using the list from Step 1, check if the new/changed code has corresponding tests:');
+    sections.push('');
+    sections.push('For each new file added in the branch, check:');
+    sections.push('- New endpoint/controller → should have a `*.spec.ts` or `*.test.ts` testing the route');
+    sections.push('- New use case/service → should have a `*.spec.ts` or `*.test.ts` testing the business logic');
+    sections.push('- New React component → should have a `*.test.tsx` testing rendering and interactions');
+    sections.push('- New utility function → should have a `*.test.ts` testing inputs/outputs');
+    sections.push('');
+    sections.push('If `HAS_TEST_FRAMEWORK` is true but tests are MISSING for new code:');
+    sections.push('- Mark as **WARNING: missing test coverage**');
+    sections.push('- Proceed to Step 6 to write the missing tests');
+    sections.push('');
+    sections.push('If `HAS_TEST_FRAMEWORK` is false:');
+    sections.push('- Skip test creation — do NOT install a test framework');
+    sections.push('- Log: "No test framework configured — skipping automated test enforcement"');
+    sections.push('');
+
+    // Step 6 — Write Missing Tests
+    sections.push('### Step 6 — Write Missing Tests');
+    sections.push('If `HAS_TEST_FRAMEWORK` is true AND tests are missing for new code:');
+    sections.push('');
+    sections.push('1. Create test files following the project\'s existing test conventions:');
+    sections.push('   - Same directory as source with `.spec.ts` / `.test.ts` suffix, OR');
+    sections.push('   - Mirror path under `__tests__/` directory, OR');
+    sections.push('   - Follow whatever pattern existing tests in the project use');
+    sections.push('');
+    sections.push('2. Write basic tests covering:');
+    sections.push('   - **Happy path**: the main expected behavior works');
+    sections.push('   - **Input validation**: invalid inputs return proper errors');
+    sections.push('   - **Edge cases**: null/undefined, empty arrays, boundary values');
+    sections.push('');
+    sections.push('3. For backend endpoints, test:');
+    sections.push('   - Correct status codes (200, 201, 400, 404, etc.)');
+    sections.push('   - Response shape matches expected interface');
+    sections.push('   - Auth/permission checks if applicable');
+    sections.push('');
+    sections.push('4. For use cases/services, test:');
+    sections.push('   - Mock dependencies (repositories, external services)');
+    sections.push('   - Verify the business logic produces correct output');
+    sections.push('   - Verify error cases throw appropriate exceptions');
+    sections.push('');
+    sections.push('5. For React components, test:');
+    sections.push('   - Component renders without crashing');
+    sections.push('   - Key elements are present in the output');
+    sections.push('   - User interactions trigger expected behavior');
+    sections.push('');
+    sections.push('6. Run the new tests: `TEST_COMMAND`');
+    sections.push('7. If tests fail, fix them until they pass');
+    sections.push('8. Commit: "test: add tests for <what was added>"');
+    sections.push('');
+
+    // Step 7 — Manual Verification
+    sections.push('### Step 7 — Manual Verification');
     sections.push('- Check for lint errors if linter is configured');
     sections.push('- Verify all imports resolve correctly');
     sections.push('- Verify no console.log or debug code left behind');
     sections.push('');
-    sections.push('### Step 4 — Functional Validation');
+
+    // Step 8 — Functional Validation
+    sections.push('### Step 8 — Functional Validation');
     sections.push('- Re-read the task description and acceptance criteria');
     sections.push('- Verify the implementation addresses every requirement');
     sections.push('- Check edge cases are handled');
     sections.push('');
-    sections.push('### Step 4.5 — Execution Path Verification (CRITICAL)');
+
+    // Step 8.5 — Execution Path Verification
+    sections.push('### Step 8.5 — Execution Path Verification (CRITICAL)');
     sections.push('- For every file changed, trace the RENDERING/EXECUTION chain:');
     sections.push('  - Open the component that was modified');
     sections.push('  - Check if there are conditional returns BEFORE the new code (e.g., `if (x) return null`)');
@@ -346,27 +440,41 @@ export class PromptBuilder {
     sections.push('- Simulate the user journey described in the task and verify each step works');
     sections.push('- If code was added to a component that is NOT rendered in the target scenario → FAIL and fix it');
     sections.push('');
-    sections.push('### Step 4.6 — Root Cause Verification (for bug fixes)');
+
+    // Step 8.6 — Root Cause Verification
+    sections.push('### Step 8.6 — Root Cause Verification (for bug fixes)');
     sections.push('- If this was a bug fix, verify the ROOT CAUSE is addressed');
     sections.push('- Check: does the fix actually solve the problem, or just add logging/error handling?');
     sections.push('- If the fix only added try/catch, logging, or error messages WITHOUT fixing the underlying issue → FAIL the QA');
     sections.push('- A proper bug fix must change the BEHAVIOR, not just the error output');
     sections.push('- If the fix is insufficient, implement the proper fix yourself before proceeding');
     sections.push('');
-    sections.push('### Step 5 — If ALL checks pass');
+
+    // Step 9 — Final Test Run
+    sections.push('### Step 9 — Final Test Run');
+    sections.push('If `HAS_TEST_FRAMEWORK` is true:');
+    sections.push('1. Run the FULL test suite one final time: `TEST_COMMAND`');
+    sections.push('2. Run type check again: `npx tsc --noEmit`');
+    sections.push('3. ALL tests must pass and type check must be clean');
+    sections.push('4. If anything fails, fix and re-run until green');
+    sections.push('');
+
+    // Step 10 — Merge or Report
+    sections.push('### Step 10 — If ALL checks pass');
     sections.push('1. Switch to main: `git checkout main && git pull origin main`');
     sections.push(`2. Merge the branch: \`git merge ${branchName}\``);
     sections.push('3. Push to remote: `git push origin main`');
     sections.push(`4. Delete the feature branch: \`git branch -d ${branchName}\``);
     sections.push('5. Report: "QA PASSED — merged to main and pushed"');
     sections.push('');
-    sections.push('### Step 5 — If ANY check fails');
+    sections.push('### Step 10 — If ANY check fails');
     sections.push('1. Fix the issues directly in the code');
     sections.push('2. Commit with message: "fix: QA fixes for <task-name>"');
     sections.push('3. Re-run the failing checks');
-    sections.push('4. If all pass now, proceed with merge (Step 5 above)');
+    sections.push('4. If all pass now, proceed with merge (Step 10 above)');
     sections.push('5. If still failing, report the failures and do NOT merge');
     sections.push('');
+
     sections.push('IMPORTANT: This is a fully automated pipeline. Do NOT ask for confirmation. Do NOT wait for user input. Execute all changes immediately, commit, and finish.');
     sections.push('Do NOT commit unrelated files like .trello-pilot-origins.json, .trello-pilot.json, or any config/env files.');
     sections.push('');
