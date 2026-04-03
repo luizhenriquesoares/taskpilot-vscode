@@ -1,8 +1,14 @@
 import { TrelloCard } from '../trello/types';
 
+export interface AttachedImage {
+  name: string;
+  filePath: string;
+}
+
 export class PromptBuilder {
   private rules: string[] = [];
   private knowledgeContext: string = '';
+  private imagePaths: AttachedImage[] = [];
 
   setRules(rules: string[]): void {
     this.rules = rules;
@@ -10,6 +16,10 @@ export class PromptBuilder {
 
   setKnowledge(knowledgeContext: string): void {
     this.knowledgeContext = knowledgeContext;
+  }
+
+  setImagePaths(images: AttachedImage[]): void {
+    this.imagePaths = images;
   }
 
   build(card: TrelloCard): string {
@@ -53,9 +63,18 @@ export class PromptBuilder {
       }
     }
 
-    if (card.attachments?.length) {
+    // Image attachments — Claude can read these directly
+    this.appendImageSection(sections);
+
+    // Non-image attachments as reference links
+    const nonImageAttachments = card.attachments?.filter((att) => {
+      const isImage = att.mimeType?.startsWith('image/') ||
+        /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(att.name);
+      return !isImage;
+    });
+    if (nonImageAttachments?.length) {
       sections.push('## References');
-      for (const att of card.attachments) {
+      for (const att of nonImageAttachments) {
         sections.push(`- [${att.name}](${att.url})`);
       }
       sections.push('');
@@ -211,6 +230,8 @@ export class PromptBuilder {
       }
     }
 
+    this.appendImageSection(sections);
+
     if (this.rules.length > 0) {
       sections.push('## Project Rules to Validate');
       for (const rule of this.rules) {
@@ -328,6 +349,8 @@ export class PromptBuilder {
         sections.push('');
       }
     }
+
+    this.appendImageSection(sections);
 
     sections.push('## QA Instructions');
     sections.push(`You are running QA on branch \`${branchName}\`.`);
@@ -516,6 +539,18 @@ export class PromptBuilder {
       l.color === 'red' || l.name?.toLowerCase().includes('bug'),
     );
     return hasBugLabel || bugKeywords.some((kw) => text.includes(kw));
+  }
+
+  /** Append image attachment section to prompt if images are available */
+  private appendImageSection(sections: string[]): void {
+    if (this.imagePaths.length > 0) {
+      sections.push('## Image Attachments (Visual Context)');
+      sections.push('The following images were attached to this task. Use the Read tool to view each one — they provide visual context (mockups, screenshots, diagrams):');
+      for (const img of this.imagePaths) {
+        sections.push(`- \`${img.filePath}\` — ${img.name}`);
+      }
+      sections.push('');
+    }
   }
 
   buildBranchName(card: TrelloCard, prefix: string): string {

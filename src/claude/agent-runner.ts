@@ -6,7 +6,7 @@ import * as path from 'path';
 import { TrelloCard, WorkspaceConfig } from '../trello/types';
 import { TrelloApi } from '../trello/api';
 import { WorkspaceMapper } from '../trello/mapper';
-import { PromptBuilder } from './prompt-builder';
+import { PromptBuilder, type AttachedImage } from './prompt-builder';
 import { KnowledgeManager } from './knowledge';
 import { OutputPanel } from '../views/output-panel';
 
@@ -202,13 +202,23 @@ export class AgentRunner {
     // Load/generate project knowledge
     await this.ensureKnowledge(workspaceRoot, claudePath);
 
+    // Download image attachments for visual context
+    const images = await this.downloadImageAttachments(card, workspaceRoot);
+    if (images.length > 0) {
+      this.promptBuilder.setImagePaths(images);
+      this.output.logAgent(card.name, `${images.length} image(s) attached for context`);
+    }
+
     // Build prompt and open Claude Code in terminal
     const prompt = this.promptBuilder.build(card);
     this.output.logAgent(card.name, 'Opening Claude Code in terminal...');
 
     await this.openClaudeInTerminal(claudePath, workspaceRoot, prompt, card.name);
 
-    // Terminal closed — push, create PR, comment on card, move to Review
+    // Terminal closed — clean up images and push
+    this.cleanupImages(workspaceRoot);
+    this.promptBuilder.setImagePaths([]); // reset for next run
+
     const branch = branchName || 'HEAD';
     this.output.logAgent(card.name, 'Terminal closed. Pushing and creating PR...');
 
@@ -310,13 +320,22 @@ export class AgentRunner {
       ].filter(Boolean).join('\n'));
     } catch { /* ignore */ }
 
+    // Download image attachments for visual context
+    const images = await this.downloadImageAttachments(card, workspaceRoot);
+    if (images.length > 0) {
+      this.promptBuilder.setImagePaths(images);
+    }
+
     // Build review prompt with PR URL
     const prompt = this.promptBuilder.buildReview(card, branchName, prUrl);
 
     this.output.logAgent(card.name, 'Opening Claude Code for review...');
     await this.openClaudeInTerminal(claudePath, workspaceRoot, prompt, `Review: ${card.name}`);
 
-    // Terminal closed — push review fixes
+    // Terminal closed — clean up images
+    this.cleanupImages(workspaceRoot);
+    this.promptBuilder.setImagePaths([]);
+
     const isMain = branchName === 'main' || branchName === 'master';
     this.output.logAgent(card.name, 'Review terminal closed. Pushing changes...');
     try {
@@ -391,12 +410,21 @@ export class AgentRunner {
       ].filter(Boolean).join('\n'));
     } catch { /* ignore */ }
 
+    // Download image attachments for visual context
+    const images = await this.downloadImageAttachments(card, workspaceRoot);
+    if (images.length > 0) {
+      this.promptBuilder.setImagePaths(images);
+    }
+
     const prompt = this.promptBuilder.buildQA(card, branchName);
 
     this.output.logAgent(card.name, 'Opening Claude Code for QA...');
     await this.openClaudeInTerminal(claudePath, workspaceRoot, prompt, `QA: ${card.name}`);
 
-    // Terminal closed — push QA fixes
+    // Terminal closed — clean up images
+    this.cleanupImages(workspaceRoot);
+    this.promptBuilder.setImagePaths([]);
+
     const isMain = branchName === 'main' || branchName === 'master';
     this.output.logAgent(card.name, 'QA terminal closed. Pushing changes...');
     try {
@@ -751,6 +779,73 @@ sys.stdout.flush()
     }
 
     return defaultDir;
+  }
+
+  /**
+   * Download image attachments from a Trello card to a local directory.
+   * Returns the list of downloaded images with their local paths.
+   */
+  private async downloadImageAttachments(card: TrelloCard, workspaceRoot: string): Promise<AttachedImage[]> {
+    const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB max per image
+
+    const imageAttachments = card.attachments?.filter((att) => {
+      const isImage = att.mimeType?.startsWith('image/') || IMAGE_EXTENSIONS.test(att.name);
+      const sizeOk = !att.bytes || att.bytes <= MAX_FILE_SIZE;
+      return isImage && sizeOk;
+    });
+
+    if (!imageAttachments?.length) return [];
+
+    const imgDir = path.join(workspaceRoot, '.trello-pilot-images');
+    if (!fs.existsSync(imgDir)) {
+      fs.mkdirSync(imgDir, { recursive: true });
+    }
+
+    const downloaded: AttachedImage[] = [];
+
+    for (const att of imageAttachments) {
+      try {
+        // Build download URL — Trello-hosted URLs need auth params
+        let downloadUrl = att.url;
+        if (downloadUrl.includes('trello.com') || downloadUrl.includes('trello-attachments')) {
+          const separator = downloadUrl.includes('?') ? '&' : '?';
+          downloadUrl = `${downloadUrl}${separator}key=${this.api['credentials'].key}&token=${this.api['credentials'].token}`;
+        }
+
+        const response = await fetch(downloadUrl, { signal: AbortSignal.timeout(30_000) });
+        if (!response.ok) {
+          this.output.logError(`Failed to download "${att.name}": HTTP ${response.status}`);
+          continue;
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+
+        // Sanitize filename
+        const safeName = att.name
+          .replace(/[^a-zA-Z0-9._-]/g, '_')
+          .substring(0, 100);
+        const filePath = path.join(imgDir, `${att.id}_${safeName}`);
+
+        fs.writeFileSync(filePath, buffer);
+        downloaded.push({ name: att.name, filePath });
+        this.output.logAgent('Images', `Downloaded: ${att.name} (${Math.round(buffer.length / 1024)}KB)`);
+      } catch (err) {
+        this.output.logError(`Failed to download "${att.name}": ${(err as Error).message}`);
+      }
+    }
+
+    return downloaded;
+  }
+
+  /** Clean up downloaded image attachments */
+  private cleanupImages(workspaceRoot: string): void {
+    const imgDir = path.join(workspaceRoot, '.trello-pilot-images');
+    try {
+      if (fs.existsSync(imgDir)) {
+        fs.rmSync(imgDir, { recursive: true, force: true });
+      }
+    } catch { /* ignore cleanup errors */ }
   }
 
   private execGit(cwd: string, args: string[]): Promise<string> {

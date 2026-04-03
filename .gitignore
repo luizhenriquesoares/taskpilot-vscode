@@ -3,3 +3,4 @@ dist/
 *.vsix
 .env
 .DS_Store
+.trello-pilot-images/

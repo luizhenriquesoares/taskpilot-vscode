@@ -38,6 +38,8 @@ export interface TrelloAttachment {
   id: string;
   name: string;
   url: string;
+  mimeType?: string;
+  bytes?: number;
 }
 
 export interface TrelloCard {
