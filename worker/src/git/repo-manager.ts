@@ -12,7 +12,7 @@ export class RepoManager {
     await this.exec(
       process.cwd(),
       'git',
-      ['clone', '--depth', '1', '--branch', baseBranch, authUrl, targetDir],
+      ['clone', '--depth', '1', '--single-branch', '--no-tags', '-c', 'pack.threads=1', '--branch', baseBranch, authUrl, targetDir],
     );
   }
 
