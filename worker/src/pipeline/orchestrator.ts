@@ -14,7 +14,7 @@ import { ReviewStage } from './stages/review';
 import { QaStage } from './stages/qa';
 
 interface TrelloApiClient {
-  getCard(cardId: string): Promise<{ name: string; desc: string; url: string }>;
+  getCard(cardId: string): Promise<{ idShort?: number; name: string; desc: string; url: string }>;
   moveCard(cardId: string, listId: string): Promise<unknown>;
   addComment(cardId: string, text: string): Promise<void>;
 }
@@ -92,7 +92,7 @@ export class PipelineOrchestrator {
           // Since these are separate SQS messages, we reconstruct the branch from the card.
           const card = await trelloApi.getCard(event.cardId);
           const branchPrefix = event.repoConfig.branchPrefix ?? 'feat/';
-          const branchName = this.buildBranchName(card.name, branchPrefix);
+          const branchName = this.buildBranchName(card.name, branchPrefix, card.idShort);
 
           // Clone fresh for review
           const workDir = await this.prepareWorkDir(event);
@@ -126,7 +126,7 @@ export class PipelineOrchestrator {
         case PipelineStage.QA: {
           const card = await trelloApi.getCard(event.cardId);
           const branchPrefix = event.repoConfig.branchPrefix ?? 'feat/';
-          const branchName = this.buildBranchName(card.name, branchPrefix);
+          const branchName = this.buildBranchName(card.name, branchPrefix, card.idShort);
 
           // Clone fresh for QA
           const workDir = await this.prepareWorkDir(event);
@@ -222,14 +222,17 @@ export class PipelineOrchestrator {
     console.log(`[orchestrator] Enqueued ${nextStage} for card ${currentEvent.cardId}`);
   }
 
-  private buildBranchName(cardName: string, prefix: string): string {
+  private buildBranchName(cardName: string, prefix: string, idShort?: number): string {
     const slug = cardName
       .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-')
-      .substring(0, 50)
+      .substring(0, 25)
       .replace(/-$/, '');
-    return `${prefix}${slug}`;
+    const num = idShort ? `${idShort}-` : '';
+    return `${prefix}${num}${slug}`;
   }
 
   private async prepareWorkDir(event: WorkerEvent): Promise<string> {

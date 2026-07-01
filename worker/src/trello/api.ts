@@ -5,14 +5,37 @@ interface TrelloCredentials {
   token: string;
 }
 
+interface TrelloAttachment {
+  id: string;
+  name: string;
+  url: string;
+  mimeType?: string;
+  bytes?: number;
+}
+
+interface TrelloCheckItem {
+  id: string;
+  name: string;
+  state: 'complete' | 'incomplete';
+}
+
+interface TrelloChecklist {
+  id: string;
+  name: string;
+  checkItems: TrelloCheckItem[];
+}
+
 interface TrelloCard {
   id: string;
+  idShort: number;
   name: string;
   desc: string;
   url: string;
   shortUrl: string;
   idList: string;
   idBoard: string;
+  attachments?: TrelloAttachment[];
+  checklists?: TrelloChecklist[];
 }
 
 export class TrelloApi {
@@ -20,7 +43,10 @@ export class TrelloApi {
 
   async getCard(cardId: string): Promise<TrelloCard> {
     return this.request<TrelloCard>(`/cards/${cardId}`, {
-      fields: 'name,desc,url,shortUrl,idList,idBoard',
+      fields: 'name,desc,url,shortUrl,idShort,idList,idBoard',
+      attachments: 'true',
+      checklists: 'all',
+      checkItems: 'all',
     });
   }
 
